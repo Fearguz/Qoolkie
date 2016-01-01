@@ -1,0 +1,2 @@
+# Qoolkie
+Simple Qt game.
