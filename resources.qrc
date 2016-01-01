@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>black.png</file>
+        <file>black_f.png</file>
+        <file>blue.png</file>
+        <file>blue_f.png</file>
+        <file>green.png</file>
+        <file>green_f.png</file>
+        <file>pink.png</file>
+        <file>pink_f.png</file>
+        <file>purple.png</file>
+        <file>purple_f.png</file>
+        <file>red.png</file>
+        <file>red_f.png</file>
+        <file>yellow.png</file>
+        <file>yellow_f.png</file>
+        <file>1451700382_kfouleggs.ico</file>
+    </qresource>
+</RCC>
