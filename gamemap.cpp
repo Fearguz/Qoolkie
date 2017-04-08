@@ -1,128 +1,133 @@
 #include "gamemap.h"
-
 #include <queue>
 #include <map>
-#include <utility>
-#include <stdexcept>
+#include <algorithm>
 
 namespace Qoolkie
 {
 
-GameMap::GameMap(int _rows, int _cols) : rows(_rows + 2), cols(_cols + 2)
+GameMap::GameMap(uint8_t rows, uint8_t cols) : m_rows(rows + 2), m_cols(cols + 2),
+                                               m_map(m_rows, std::vector<TileContent>(m_cols, TileContent::None))
 {
-    tiles = new BallColour*[rows];
-    for (int i = 0; i < rows; ++i)
-    {
-        tiles[i] = new BallColour[cols];
-    }
-
-    fillTiles();
+    defaultFillTiles();
 }
 
-GameMap::~GameMap()
+uint8_t GameMap::getRowsCount() const noexcept
 {
-    for (int i = 0; i < rows; ++i)
-    {
-        delete[] tiles[i];
-    }
-    delete[] tiles;
+    return m_rows - 2;
 }
 
-void GameMap::clearTiles()
+uint8_t GameMap::getColsCount() const noexcept
 {
-    fillTiles();
+    return m_cols - 2;
 }
 
-void GameMap::fillTiles()
+void GameMap::clearAllTiles()
 {
-    for (int i = 0; i < rows; ++i)
+    defaultFillTiles();
+}
+
+void GameMap::defaultFillTiles() noexcept
+{
+    for (uint8_t i = 0U; i < m_rows; ++i)
     {
-        for (int j = 0; j < cols; ++j)
+        for (uint8_t j = 0U; j < m_cols; ++j)
         {
-            if (i == 0)
-                tiles[i][j] = WALL;
-            else if (j == 0)
-                tiles[i][j] = WALL;
-            else if (i == (rows - 1))
-                tiles[i][j] = WALL;
-            else if (j == (cols - 1))
-                tiles[i][j] = WALL;
+            if (i == 0U)
+            {
+                m_map[i][j] = TileContent::Wall;
+            }
+            else if (j == 0U)
+            {
+                m_map[i][j] = TileContent::Wall;
+            }
+            else if (i == (m_rows - 1))
+            {
+                m_map[i][j] = TileContent::Wall;
+            }
+            else if (j == (m_cols - 1))
+            {
+                m_map[i][j] = TileContent::Wall;
+            }
             else
-                tiles[i][j] = NONE;
+            {
+                m_map[i][j] = TileContent::None;
+            }
         }
     }
 }
 
-void GameMap::setTileOccupation(int row, int col, GameMap::BallColour colour)
+void GameMap::setTileContent(uint8_t rowIdx, uint8_t colIdx, TileContent content)
 {
-    tiles[row][col] = colour;
+    m_map[rowIdx][colIdx] = content;
 }
 
-bool GameMap::isTileOccupied(int row, int col)
+TileContent GameMap::getTileContent(uint8_t rowIdx, uint8_t colIdx) const
 {
-    return (tiles[row][col] != NONE);
+    return m_map[rowIdx][colIdx];
 }
 
-GameMap::BallColour GameMap::getTileBallColour(int row, int col)
+bool GameMap::isTileOccupied(uint8_t rowIdx, uint8_t colIdx) const
 {
-    return tiles[row][col];
+    TileContent currentTileContent = m_map[rowIdx][colIdx];
+    return (currentTileContent != TileContent::None);
 }
 
-std::vector<std::pair<int, int>> GameMap::getAllFreeTiles()
+std::vector<std::pair<uint8_t, uint8_t>> GameMap::getFreeTiles() const noexcept
 {
-    std::vector<std::pair<int, int>> freeTiles;
-    for (int i = 0; i < rows; ++i)
+    std::vector<std::pair<uint8_t, uint8_t>> freeTiles;
+    for (uint8_t i = 0U; i < m_rows; ++i)
     {
-        for (int j = 0; j < cols; ++j)
+        for (uint8_t j = 0U; j < m_cols; ++j)
         {
-            if (tiles[i][j] == NONE)
+            if (m_map[i][j] == TileContent::None)
             {
                 freeTiles.push_back(std::make_pair(i, j));
             }
         }
     }
-
     return freeTiles;
 }
 
-bool GameMap::isAnyTileStillFree()
+bool GameMap::isAnyFreeTile() const noexcept
 {
-    for (int i = 0; i < rows; ++i)
+    for (uint8_t i = 0U; i < m_rows; ++i)
     {
-        for (int j = 0; j < cols; ++j)
+        for (uint8_t j = 0U; j < m_cols; ++j)
         {
-            if (tiles[i][j] == NONE)
+            if (m_map[i][j] == TileContent::None)
+            {
                 return true;
+            }
         }
     }
-
     return false;
 }
 
-bool GameMap::findPath(int from_row, int from_col, int dest_row, int dest_col)
+bool GameMap::findPath(uint8_t fromRow, uint8_t fromCol, uint8_t destRow, uint8_t destCol) const
 {
-    std::queue<std::pair<int, int>> set;
-    if (tiles[from_row - 1][from_col] == NONE)
-        set.push(std::make_pair(from_row - 1, from_col));
-    if (tiles[from_row][from_col - 1] == NONE)
-        set.push(std::make_pair(from_row, from_col - 1));
-    if (tiles[from_row + 1][from_col] == NONE)
-        set.push(std::make_pair(from_row + 1, from_col));
-    if (tiles[from_row][from_col + 1] == NONE)
-        set.push(std::make_pair(from_row, from_col + 1));
+    std::queue<std::pair<uint8_t, uint8_t>> set;
+    if (m_map[fromRow - 1][fromCol] == TileContent::None)
+        set.push(std::make_pair(fromRow - 1, fromCol));
+    if (m_map[fromRow][fromCol - 1] == TileContent::None)
+        set.push(std::make_pair(fromRow, fromCol - 1));
+    if (m_map[fromRow + 1][fromCol] == TileContent::None)
+        set.push(std::make_pair(fromRow + 1, fromCol));
+    if (m_map[fromRow][fromCol + 1] == TileContent::None)
+        set.push(std::make_pair(fromRow, fromCol + 1));
 
-    std::vector<std::vector<bool>> visited(rows, std::vector<bool>(cols));
-    for (int i = 0; i < rows; ++i)
+    std::vector<std::vector<bool>> visited(m_rows, std::vector<bool>(m_cols));
+    for (uint8_t i = 0U; i < m_rows; ++i)
     {
-        for (int j = 0; j < cols; ++j)
+        for (uint8_t j = 0U; j < m_cols; ++j)
         {
-            if (i == 0)
+            if (i == 0U)
                 visited[i][j] = true;
-            else if (j == 0)
+            else if (j == 0U)
                 visited[i][j] = true;
-            else if (i == (rows - 1))
+            else if (i == (m_rows - 1))
                 visited[i][j] = true;
-            else if (j == (cols - 1))
+            else if (j == (m_cols - 1))
                 visited[i][j] = true;
             else
                 visited[i][j] = false;
@@ -134,44 +139,43 @@ bool GameMap::findPath(int from_row, int from_col, int dest_row, int dest_col)
         auto elem = set.front();
         set.pop();
 
-        int curr_row_idx = elem.first;
-        int curr_col_idx = elem.second;
-        visited[curr_row_idx][curr_col_idx] = true;
+        uint8_t currentRowIdx = elem.first;
+        uint8_t currentColIdx = elem.second;
+        visited[currentRowIdx][currentColIdx] = true;
 
-        if (curr_row_idx == dest_row && curr_col_idx == dest_col)
+        if (currentRowIdx == destRow && currentColIdx == destCol)
         {
             return true;
         }
         else
         {
-            if (tiles[curr_row_idx - 1][curr_col_idx] == NONE && visited[curr_row_idx - 1][curr_col_idx] == false)
-                set.push(std::make_pair(curr_row_idx - 1, curr_col_idx));
-            if (tiles[curr_row_idx][curr_col_idx - 1] == NONE && visited[curr_row_idx][curr_col_idx - 1] == false)
-                set.push(std::make_pair(curr_row_idx, curr_col_idx - 1));
-            if (tiles[curr_row_idx + 1][curr_col_idx] == NONE && visited[curr_row_idx + 1][curr_col_idx] == false)
-                set.push(std::make_pair(curr_row_idx + 1, curr_col_idx));
-            if (tiles[curr_row_idx][curr_col_idx + 1] == NONE && visited[curr_row_idx][curr_col_idx + 1] == false)
-                set.push(std::make_pair(curr_row_idx, curr_col_idx + 1));
+            if (m_map[currentRowIdx - 1][currentColIdx] == TileContent::None && visited[currentRowIdx - 1][currentColIdx] == false)
+                set.push(std::make_pair(currentRowIdx - 1, currentColIdx));
+            if (m_map[currentRowIdx][currentColIdx - 1] == TileContent::None && visited[currentRowIdx][currentColIdx - 1] == false)
+                set.push(std::make_pair(currentRowIdx, currentColIdx - 1));
+            if (m_map[currentRowIdx + 1][currentColIdx] == TileContent::None && visited[currentRowIdx + 1][currentColIdx] == false)
+                set.push(std::make_pair(currentRowIdx + 1, currentColIdx));
+            if (m_map[currentRowIdx][currentColIdx + 1] == TileContent::None && visited[currentRowIdx][currentColIdx + 1] == false)
+                set.push(std::make_pair(currentRowIdx, currentColIdx + 1));
         }
     }
-
     return false;
 }
 
-std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, BallColour ballColour)
+std::vector<std::pair<uint8_t, uint8_t>> GameMap::checkForScore(uint8_t ballXPos, uint8_t ballYPos, TileContent content) const
 {
-    std::vector<std::pair<int, int>> tilesToBeCleared_leftToRight;
-    std::vector<std::pair<int, int>> tilesToBeCleared_leftDiagonal;
-    std::vector<std::pair<int, int>> tilesToBeCleared_TopToBottom;
-    std::vector<std::pair<int, int>> tilesToBeCleared_rightDiagonal;
+    std::vector<std::pair<uint8_t, uint8_t>> tilesToBeCleared_leftToRight;
+    std::vector<std::pair<uint8_t, uint8_t>> tilesToBeCleared_leftDiagonal;
+    std::vector<std::pair<uint8_t, uint8_t>> tilesToBeCleared_TopToBottom;
+    std::vector<std::pair<uint8_t, uint8_t>> tilesToBeCleared_rightDiagonal;
 
     // Check Left to Right
-    int curr_x = ball_x, curr_y = ball_y;
+    int curr_x = ballXPos, curr_y = ballYPos;
     bool goLeft = true, goRight = true;
     tilesToBeCleared_leftToRight.push_back(std::make_pair(curr_x, curr_y));
     while (goLeft)
     {
-        if (tiles[curr_x][curr_y - 1] != ballColour)
+        if (m_map[curr_x][curr_y - 1] != content)
         {
             goLeft = false;
         }
@@ -182,10 +186,10 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
         }
     }
 
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     while (goRight)
     {
-        if (tiles[curr_x][curr_y + 1] != ballColour)
+        if (m_map[curr_x][curr_y + 1] != content)
         {
             goRight = false;
         }
@@ -197,12 +201,12 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
     }
 
     //Check Left Diagonal
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     bool goLeftDiag = true, goRightDiag = true;
     tilesToBeCleared_leftDiagonal.push_back(std::make_pair(curr_x, curr_y));
     while (goLeftDiag)
     {
-        if (tiles[curr_x - 1][curr_y - 1] != ballColour)
+        if (m_map[curr_x - 1][curr_y - 1] != content)
         {
             goLeftDiag = false;
         }
@@ -214,10 +218,10 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
         }
     }
 
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     while (goRightDiag)
     {
-        if (tiles[curr_x + 1][curr_y + 1] != ballColour)
+        if (m_map[curr_x + 1][curr_y + 1] != content)
         {
             goRightDiag = false;
         }
@@ -230,12 +234,12 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
     }
 
     //Check Top to Bottom
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     bool goTop = true, goBottom = true;
     tilesToBeCleared_TopToBottom.push_back(std::make_pair(curr_x, curr_y));
     while (goTop)
     {
-        if (tiles[curr_x - 1][curr_y] != ballColour)
+        if (m_map[curr_x - 1][curr_y] != content)
         {
             goTop = false;
         }
@@ -246,10 +250,10 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
         }
     }
 
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     while (goBottom)
     {
-        if (tiles[curr_x + 1][curr_y] != ballColour)
+        if (m_map[curr_x + 1][curr_y] != content)
         {
             goBottom = false;
         }
@@ -261,12 +265,12 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
     }
 
     //Check Right Diagonal
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     bool goLDiag = true, goRDiag = true;
     tilesToBeCleared_rightDiagonal.push_back(std::make_pair(curr_x, curr_y));
     while (goLDiag)
     {
-        if (tiles[curr_x + 1][curr_y - 1] != ballColour)
+        if (m_map[curr_x + 1][curr_y - 1] != content)
         {
             goLDiag = false;
         }
@@ -278,10 +282,10 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
         }
     }
 
-    curr_x = ball_x, curr_y = ball_y;
+    curr_x = ballXPos, curr_y = ballYPos;
     while (goRDiag)
     {
-        if (tiles[curr_x - 1][curr_y + 1] != ballColour)
+        if (m_map[curr_x - 1][curr_y + 1] != content)
         {
             goRDiag = false;
         }
@@ -293,7 +297,7 @@ std::vector<std::pair<int, int>> GameMap::checkForScore(int ball_x, int ball_y, 
         }
     }
 
-    std::map<size_t, std::vector<std::pair<int, int>>*> sizeVectorMap;
+    std::map<size_t, std::vector<std::pair<uint8_t, uint8_t>>*> sizeVectorMap;
     sizeVectorMap[tilesToBeCleared_leftDiagonal.size()] = &tilesToBeCleared_leftDiagonal;
     sizeVectorMap[tilesToBeCleared_leftToRight.size()] = &tilesToBeCleared_leftToRight;
     sizeVectorMap[tilesToBeCleared_rightDiagonal.size()] = &tilesToBeCleared_rightDiagonal;

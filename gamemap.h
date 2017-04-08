@@ -1,52 +1,60 @@
-#pragma once
+#ifndef GAMEMAP_H
+#define GAMEMAP_H
 
+#include <cstdint>
 #include <vector>
-#include <QString>
 
 namespace Qoolkie
 {
 
+enum class TileContent : uint8_t
+{
+    Black,
+    Blue,
+    Green,
+    Pink,
+    Purple,
+    Red,
+    Yellow,
+    Wall,
+    None,
+};
+
 class GameMap
 {
 public:
-    enum BallColour {
-        BLACK = 0,
-        BLUE,
-        GREEN,
-        PINK,
-        PURPLE,
-        RED,
-        YELLOW,
-        NONE,
-        WALL
-    };
+    GameMap(uint8_t rows, uint8_t cols);
+    GameMap(const GameMap&) = default;
+    GameMap(GameMap&&) = default;
+    GameMap& operator=(const GameMap&) = default;
+    GameMap& operator=(GameMap&&) = default;
+    ~GameMap() = default;
+
+    uint8_t getRowsCount() const noexcept;
+    uint8_t getColsCount() const noexcept;
+
+    void clearAllTiles();
+
+    bool isTileOccupied(uint8_t rowIdx, uint8_t colIdx) const;
+    void setTileContent(uint8_t rowIdx, uint8_t colIdx, TileContent colour);
+    TileContent getTileContent(uint8_t rowIdx, uint8_t colIdx) const;
+
+    bool isAnyFreeTile() const noexcept;
+    std::vector<std::pair<uint8_t, uint8_t>> getFreeTiles() const noexcept;
+
+    bool findPath(uint8_t from_row, uint8_t from_col, uint8_t dest_row, uint8_t dest_col) const;
+    std::vector<std::pair<uint8_t, uint8_t>> checkForScore(uint8_t ballXPos, uint8_t ballYPos, TileContent content) const;
 
 private:
-    int rows;
-    int cols;
-    BallColour** tiles;
+    using MapType = std::vector<std::vector<TileContent>>;
 
-public:
-    GameMap(int _rows, int _cols);
-    ~GameMap();
+    uint8_t m_rows;
+    uint8_t m_cols;
+    MapType m_map;
 
-    int getRowsCount() { return rows - 2; }
-    int getColsCount() { return cols - 2; }
-
-    std::vector<std::pair<int, int>> getAllFreeTiles();
-    bool isAnyTileStillFree();
-
-    void clearTiles();
-
-    bool isTileOccupied(int row, int col);
-    void setTileOccupation(int row, int col, BallColour colour);
-    BallColour getTileBallColour(int row, int col);
-
-    bool findPath(int from_row, int from_col, int dest_row, int dest_col);
-    std::vector<std::pair<int, int>> checkForScore(int ball_x, int ball_y, BallColour colour);
-
-private:
-    void fillTiles();
+    void defaultFillTiles() noexcept;
 };
 
 }
+
+#endif

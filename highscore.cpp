@@ -11,12 +11,9 @@
 namespace Qoolkie
 {
 
-Highscore::Highscore(std::string filename) : filepath(QDir::homePath() + QDir::separator() + QString::fromStdString(filename))
+void Highscore::save(std::string fileName, std::string userName, uint64_t score) const
 {
-}
-
-void Highscore::save(std::string name, long int score)
-{
+    QString filepath = QDir::homePath() + QDir::separator() + QString::fromStdString(fileName);
     QFile loadFile(filepath);
     if (loadFile.exists())
     {
@@ -32,7 +29,7 @@ void Highscore::save(std::string name, long int score)
         QJsonArray highscores = docObject["highscores"].toArray();
 
         QJsonObject newHighscore;
-        newHighscore["name"] = QString::fromStdString(name);
+        newHighscore["name"] = QString::fromStdString(userName);
         newHighscore["score"] = QString::number(score);
         highscores.push_back(newHighscore);
 
@@ -52,12 +49,14 @@ void Highscore::save(std::string name, long int score)
     {
         QFile saveFile(filepath);
         if (!saveFile.open(QIODevice::ReadWrite))
+        {
             throw std::runtime_error("Could not open file for writing");
+        }
 
         QJsonObject json, highscore;
         QJsonArray highscores;
 
-        highscore["name"] = QString::fromStdString(name);
+        highscore["name"] = QString::fromStdString(userName);
         highscore["score"] = QString::number(score);
         highscores.append(highscore);
         json["highscores"] = highscores;
@@ -69,22 +68,22 @@ void Highscore::save(std::string name, long int score)
 
 struct less_than_score
 {
-    inline bool operator()(const std::pair<std::string, long int>& left, const std::pair<std::string, long int>& right)
+    inline bool operator()(const std::pair<std::string, uint64_t>& left, const std::pair<std::string, uint64_t>& right)
     {
         return (left.second > right.second);
     }
 };
 
-std::vector<std::pair<std::string, long int>> Highscore::loadHighscores()
+std::vector<std::pair<std::string, uint64_t>> Highscore::loadHighscores(std::string fileName) const
 {
-    std::vector<std::pair<std::string, long int>> highscores;
+    QString filepath = QDir::homePath() + QDir::separator() + QString::fromStdString(fileName);
+    std::vector<std::pair<std::string, uint64_t>> highscores;
 
     QFile loadFile(filepath);
     if (!loadFile.exists())
     {
         return highscores;
     }
-
     if (!loadFile.open(QIODevice::ReadWrite))
     {
         throw std::runtime_error("Could not open JSON file");
@@ -105,7 +104,7 @@ std::vector<std::pair<std::string, long int>> Highscore::loadHighscores()
         QString scoreStr = obj["score"].toString();
         long int score = scoreStr.toLong();
 
-        std::pair<std::string, long int> p(name.toStdString(), score);
+        std::pair<std::string, uint64_t> p(name.toStdString(), score);
         highscores.push_back(p);
     }
 

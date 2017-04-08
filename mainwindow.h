@@ -1,11 +1,12 @@
-#pragma once
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <game.h>
+#include "game.h"
 
 namespace Ui
 {
-class MainWindow;
+    class MainWindow;
 }
 
 class MainWindow : public QMainWindow
@@ -13,29 +14,38 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(Qoolkie::Game &_controller, QWidget *parent = 0);
-    ~MainWindow();
+    MainWindow(Qoolkie::Game& game, QWidget *parent = nullptr);
+    ~MainWindow() noexcept;
 
-    void updateScore(unsigned int score);
-    void setIconOnTile(QString imagePath, int row, int col);
+    void setTileIcon(QString imagePath, uint8_t rowIdx, uint8_t colIdx);
+    void cleanTile(uint8_t rowIdx, uint8_t colIdx);
     void cleanTiles();
-    void cleanTile(int x, int y);
 
-    QString showInputBox(QString title, QString text);
-    int showMessageBox(QString title, QString message);
+    QString showInputBox(const QString& title, const QString& message);
+    int showMessageBox(const QString& title, const QString& message);
 
 public slots:
-    void start5Clicked();
-    void start7Clicked();
-    void highscores5Clicked();
-    void highscores7Clicked();
-    void tileClicked();
+    void onQoolkieGenerated(uint8_t x, uint8_t y, Qoolkie::TileContent content);
+    void onFocusChanged(uint8_t x, uint8_t y, Qoolkie::TileContent content);
+    void onScoreChanged(uint32_t score);
+    void onTileCleared(uint8_t x, uint8_t y);
+    void onGameFinished();
+
+    void onTileClicked();
+
+    void startGameWith5Colors();
+    void startGameWith7Colors();
+    void showHighscoresFor5Colors();
+    void showHighscoresFor7Colors();
 
 private:
-    Qoolkie::Game &controller;
-    Ui::MainWindow *ui;
-    int focusedTile_x;
-    int focusedTile_y;
+    static constexpr uint8_t TileSizePx {60};
 
-    void tilesInit();
+    Qoolkie::Game& m_game;
+    Ui::MainWindow* m_ui;
+
+    void initGameMap();
+    void updateScore(uint32_t score);
 };
+
+#endif

@@ -1,70 +1,58 @@
 #include "game.h"
 #include <mainwindow.h>
 
+#include <QDebug>
+
 namespace Qoolkie
 {
 
-Game::Game(GameMap &_map) : map(_map), mainWindow(NULL), highscores_5colors("highscores_5.json"),
-                            highscores_7colors("highscores_7.json"), isBallClicked(false),
-                            ball_x(0), ball_y(0), score(0), gain(0), coloursUsed(5), imagesPath(":/images/")
+constexpr char Game::ResourcesPath[];
+constexpr char Game::highscores5FileName[];
+constexpr char Game::highscores7FileName[];
+constexpr std::array<TileContent, 7> Game::ContentsPot;
+
+void Game::start(ColoursUsed colours)
 {
+    m_map.clearAllTiles();
+
+    m_coloursInGame = colours;
+    m_currentGain = static_cast<uint8_t>(m_coloursInGame);
+    m_score = 0U;
+    generateQoolkies();
 }
 
-void Game::setMainWindow(MainWindow *window)
+void Game::generateQoolkies()
 {
-    mainWindow = window;
-    mainWindow->updateScore(score);
-}
-
-void Game::start()
-{
-    map.clearTiles();
-    mainWindow->cleanTiles();
-    score = 0;
-    mainWindow->updateScore(score);
-
-    generateBalls();
-}
-
-void Game::setColoursNumber(int number)
-{
-    gain = number;
-    if (coloursUsed != number)
+    if (!m_map.isAnyFreeTile())
     {
-        coloursUsed = number;
-        start();
+        return;
     }
-}
+    std::vector<std::pair<uint8_t, uint8_t>> freeTiles = m_map.getFreeTiles();
+    std::map<std::pair<uint8_t, uint8_t>, TileContent> generatedTiles;
 
-void Game::generateBalls()
-{
-    std::vector<std::pair<int, int>> freeTiles = map.getAllFreeTiles();
-    std::map<std::pair<int, int>, GameMap::BallColour> newTiles;
-
-    const int ballsToBeGenerated = 3;
-    for (int i = 0; i < ballsToBeGenerated; ++i)
+    static constexpr uint8_t newTilesNb {3U};
+    for (uint8_t i = 0U; i < newTilesNb; ++i)
     {
-        if (freeTiles.empty())
+        if (!m_map.isAnyFreeTile())
         {
             break;
         }
+        uint8_t tileIdx = rand() % freeTiles.size();
+        uint8_t contentIdx = rand() % static_cast<uint8_t>(m_coloursInGame);
 
-        int idx = rand() % freeTiles.size();
-        std::pair<int, int> tile = freeTiles.at(idx);
-        freeTiles.erase(freeTiles.begin() + idx);
+        std::pair<uint8_t, uint8_t> tile = freeTiles.at(tileIdx);
+        freeTiles.erase(freeTiles.begin() + tileIdx);
 
-        int colour = rand() % coloursUsed;
-        GameMap::BallColour ballColour = coloursPot.at(colour);
-        map.setTileOccupation(tile.first, tile.second, ballColour);
-        generateBall(tile.first - 1, tile.second - 1, ballColour);
-        newTiles[tile] = ballColour;
+        TileContent content = ContentsPot[contentIdx];
+        generatedTiles[tile] = content;
+
+        m_map.setTileContent(tile.first, tile.second, content);
+        emit qoolkieGenerated(tile.first - 1, tile.second - 1, content);
     }
 
-    for (auto it = newTiles.begin(); it != newTiles.end(); ++it)
+    for (auto&& tile : generatedTiles)
     {
-        auto pair = *it;
-
-        std::vector<std::pair<int, int>> ret = map.checkForScore(pair.first.first, pair.first.second, pair.second);
+        auto ret = m_map.checkForScore(tile.first.first, tile.first.second, tile.second);
         if (ret.size() >= 5)
         {
             doScore(ret);
@@ -72,159 +60,146 @@ void Game::generateBalls()
     }
 }
 
-void Game::showHighscores(int coloursUsed)
+void Game::saveHighscore(const QString &userName) const
 {
-    Highscore* highscore = NULL;
-    if (coloursUsed == 5)
-        highscore = &highscores_5colors;
-    else if (coloursUsed == 7)
-        highscore = &highscores_7colors;
-    else
-        throw std::runtime_error("Something wrong happened here");
+    m_highscore.save(m_coloursInGame == ColoursUsed::Five ? highscores5FileName : highscores7FileName,
+                     userName.toStdString(), m_score);
+}
 
-    std::vector<std::pair<std::string, long int>> highscores = highscore->loadHighscores();
+QString Game::getHighscores(ColoursUsed coloursUsedInGame) const
+{
+    auto highscores = m_highscore.loadHighscores(coloursUsedInGame == ColoursUsed::Five ? highscores5FileName : highscores7FileName);
 
     QString scores;
-    size_t len = highscores.size();
-    for (size_t i = 0; i < len; ++i)
+    uint8_t counter {1U};
+    for (auto&& score : highscores)
     {
-        scores.append(QString::number(i + 1) + ". " + QString::fromStdString(highscores.at(i).first) + " \t"
-                      + QString::number(highscores.at(i).second) + "\n");
+        scores.append(QString::number(counter))
+              .append(". ")
+              .append(QString::fromStdString(score.first))
+              .append(" \t")
+              .append(QString::number(score.second)).append('\n');
+        ++counter;
     }
 
-    if (!scores.isEmpty())
-        mainWindow->showMessageBox("Najlepsze wyniki", scores);
-    else
-        mainWindow->showMessageBox("Brak wyników", "");
+    return scores;
 }
 
 void Game::preProcessNextTurn()
 {
-    generateBalls();
-
-    if (!map.isAnyTileStillFree())
+    generateQoolkies();
+    if (!m_map.isAnyFreeTile())
     {
-        QString name = mainWindow->showInputBox("Zapisz wynik", "Przegrałeś. Podaj swoje imię i zapisz wynik.");
-        if (coloursUsed == 5)
-            highscores_5colors.save(name.toStdString(), score);
-        else if (coloursUsed == 7)
-            highscores_7colors.save(name.toStdString(), score);
+        emit gameOver();
     }
 }
 
-int Game::postProcessTurn(int dest_x, int dest_y)
+uint32_t Game::postProcessTurn(uint8_t destX, uint8_t destY)
 {
-    std::vector<std::pair<int, int>> ret = map.checkForScore(dest_x, dest_y, map.getTileBallColour(dest_x, dest_y));
+    auto ret = m_map.checkForScore(destX, destY, m_map.getTileContent(destX, destY));
     if (ret.size() >= 5)
     {
         return doScore(ret);
     }
-    return 0;
+    return 0U;
 }
 
-int Game::doScore(std::vector<std::pair<int, int>> tiles)
+uint32_t Game::doScore(std::vector<std::pair<uint8_t, uint8_t>> tiles)
 {
-    for (auto it = tiles.begin(); it != tiles.end(); ++it)
+    for (auto&& tile : tiles)
     {
-        std::pair<int, int> tile = *it;
-        int x = tile.first;
-        int y = tile.second;
-
-        map.setTileOccupation(x, y, GameMap::NONE);
-        clearTile(x, y);
+        uint8_t x = tile.first;
+        uint8_t y = tile.second;
+        m_map.setTileContent(x, y, TileContent::None);
+        emit tileCleared(x - 1, y - 1);
     }
 
-    size_t size = tiles.size();
-    int addition = calculateScore(size);
-    score += addition;
-    mainWindow->updateScore(score);
-    return addition;
+    uint16_t gain = calculateGain(tiles.size());
+    m_score += gain;
+    emit scoreChanged(m_score);
+    return gain;
 }
 
-int Game::calculateScore(size_t ballsInARow)
+uint16_t Game::calculateGain(size_t ballsInRow) const noexcept
 {
-    int actual_score = gain;
-    if (ballsInARow == 6)
-        actual_score *= 2;
-    else if (ballsInARow == 7)
-        actual_score *= 3;
-    else if (ballsInARow > 7)
-        actual_score *= 4;
-
-    return actual_score;
-}
-
-void Game::moveBall(int dest_x, int dest_y)
-{
-    GameMap::BallColour colour = map.getTileBallColour(ball_x, ball_y);
-    map.setTileOccupation(ball_x, ball_y, GameMap::NONE);
-    generateBall(ball_x - 1, ball_y - 1, GameMap::NONE);
-    map.setTileOccupation(dest_x, dest_y, colour);
-    generateBall(dest_x - 1, dest_y - 1, colour);
-
-    int scored = postProcessTurn(dest_x, dest_y);
-    if (scored == 0)
-        preProcessNextTurn();
-}
-
-void Game::tileClicked(int row, int col)
-{
-    int actual_row = row + 1;
-    int actual_col = col + 1;
-
-    if (map.isTileOccupied(actual_row, actual_col) == false)
+    uint16_t gain = m_currentGain;
+    if (ballsInRow == 6)
     {
-        if (isBallClicked && map.findPath(ball_x, ball_y, actual_row, actual_col))
+        return gain * 2;
+    }
+    else if (ballsInRow == 7)
+    {
+        return gain * 3;
+    }
+    else if (ballsInRow > 7)
+    {
+        return gain * 4;
+    }
+    return gain;
+}
+
+void Game::moveQoolkie(uint8_t destX, uint8_t destY)
+{
+    TileContent content = m_map.getTileContent(m_ballXPos, m_ballYPos);
+
+    m_map.setTileContent(m_ballXPos, m_ballYPos, TileContent::None);
+    emit qoolkieGenerated(m_ballXPos - 1, m_ballYPos - 1, TileContent::None);
+
+    m_map.setTileContent(destX, destY, content);
+    emit qoolkieGenerated(destX - 1, destY - 1, content);
+
+    uint32_t gain = postProcessTurn(destX, destY);
+    if (gain == 0U)
+    {
+        preProcessNextTurn();
+    }
+}
+
+void Game::tileClicked(uint8_t rowIdx, uint8_t colIdx)
+{
+    uint8_t x = rowIdx + 1;
+    uint8_t y = colIdx + 1;
+    if (m_map.isTileOccupied(x, y))
+    {
+        if (m_isBallClicked)
         {
-            moveBall(actual_row, actual_col);
-            isBallClicked = false;
+            emit qoolkieGenerated(m_ballXPos - 1, m_ballYPos - 1, m_map.getTileContent(m_ballXPos, m_ballYPos));
         }
+        m_isBallClicked = true;
+        m_ballXPos = x;
+        m_ballYPos = y;
+        emit focusChanged(m_ballXPos - 1, m_ballYPos - 1, m_map.getTileContent(m_ballXPos, m_ballYPos));
     }
     else
     {
-        if (isBallClicked)
+        if (m_isBallClicked && m_map.findPath(m_ballXPos, m_ballYPos, x, y))
         {
-            generateBall(ball_x - 1, ball_y - 1, map.getTileBallColour(ball_x, ball_y));
+            moveQoolkie(x, y);
+            m_isBallClicked = false;
         }
-
-        isBallClicked = true;
-        ball_x = actual_row;
-        ball_y = actual_col;
-
-        focusOnBall(ball_x - 1, ball_y - 1, map.getTileBallColour(ball_x, ball_y));
     }
 }
 
-void Game::generateBall(int row_idx, int col_idx, GameMap::BallColour colour)
+QString Game::convertContentToString(TileContent content) noexcept
 {
-    QString path = QString::fromStdString(imagesPath) + convertColourToString(colour) + ".png";
-    mainWindow->setIconOnTile(path, row_idx, col_idx);
-}
-
-void Game::focusOnBall(int row_idx, int col_idx, GameMap::BallColour colour)
-{
-    QString path = QString::fromStdString(imagesPath) + convertColourToString(colour) + "_f.png";
-    mainWindow->setIconOnTile(path, row_idx, col_idx);
-}
-
-void Game::clearTile(int row_idx, int col_idx)
-{
-    mainWindow->cleanTile(row_idx - 1, col_idx - 1);
-}
-
-QString Game::convertColourToString(GameMap::BallColour colour)
-{
-    switch (colour)
+    switch (content)
     {
-        case GameMap::BLACK: return "black";
-        case GameMap::BLUE: return "blue";
-        case GameMap::GREEN: return "green";
-        case GameMap::PINK: return "pink";
-        case GameMap::PURPLE: return "purple";
-        case GameMap::RED: return "red";
-        case GameMap::YELLOW: return "yellow";
-        case GameMap::WALL: return "wall";
-        default: return "Unknown";
+        case TileContent::Black:
+            return "black";
+        case TileContent::Blue:
+            return "blue";
+        case TileContent::Green:
+            return "green";
+        case TileContent::Pink:
+            return "pink";
+        case TileContent::Purple:
+            return "purple";
+        case TileContent::Red:
+            return "red";
+        case TileContent::Yellow:
+            return "yellow";
+        default:
+            return "";
     }
 }
 

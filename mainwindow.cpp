@@ -5,142 +5,203 @@
 #include <QDir>
 #include <QString>
 
+#include <QDebug>
+
 using namespace Qoolkie;
 
-MainWindow::MainWindow(Qoolkie::Game &_controller, QWidget *parent) : QMainWindow(parent), controller(_controller), ui(new Ui::MainWindow)
+MainWindow::MainWindow(Qoolkie::Game& game, QWidget* parent) : QMainWindow(parent), m_game(game), m_ui(new Ui::MainWindow)
 {
-    ui->setupUi(this);
+    m_ui->setupUi(this);
+    connect(m_ui->actionStart5, SIGNAL(triggered()), this, SLOT(startGameWith5Colors()));
+    connect(m_ui->actionStart7, SIGNAL(triggered()), this, SLOT(startGameWith7Colors()));
+    connect(m_ui->actionWyniki5, SIGNAL(triggered()), this, SLOT(showHighscoresFor5Colors()));
+    connect(m_ui->actionWyniki7, SIGNAL(triggered()), this, SLOT(showHighscoresFor7Colors()));
 
-    controller.setMainWindow(this);
-    QObject::connect(ui->actionStart5, SIGNAL(triggered()), this, SLOT(start5Clicked()));
-    QObject::connect(ui->actionStart7, SIGNAL(triggered()), this, SLOT(start7Clicked()));
-    QObject::connect(ui->actionWyniki5, SIGNAL(triggered()), this, SLOT(highscores5Clicked()));
-    QObject::connect(ui->actionWyniki7, SIGNAL(triggered()), this, SLOT(highscores7Clicked()));
+    connect(&m_game, SIGNAL(qoolkieGenerated(uint8_t,uint8_t,Qoolkie::TileContent)), this, SLOT(onQoolkieGenerated(uint8_t,uint8_t,Qoolkie::TileContent)));
+    connect(&m_game, SIGNAL(focusChanged(uint8_t,uint8_t,Qoolkie::TileContent)), this, SLOT(onFocusChanged(uint8_t,uint8_t,Qoolkie::TileContent)));
+    connect(&m_game, SIGNAL(scoreChanged(uint32_t)), this, SLOT(onScoreChanged(uint32_t)));
+    connect(&m_game, SIGNAL(tileCleared(uint8_t,uint8_t)), this, SLOT(onTileCleared(uint8_t,uint8_t)));
+    connect(&m_game, SIGNAL(gameOver()), this, SLOT(onGameFinished()));
 
-    tilesInit();
+    initGameMap();
 }
 
-void MainWindow::tilesInit()
+MainWindow::~MainWindow() noexcept
 {
-    int rowCnt = ui->plansza->rowCount(), colCnt = ui->plansza->columnCount();
-    for (int i = 0; i < rowCnt; ++i)
+    delete m_ui;
+}
+
+void MainWindow::initGameMap()
+{
+    uint8_t rows = m_ui->gameMap->rowCount();
+    uint8_t cols = m_ui->gameMap->columnCount();
+    for (uint8_t i = 0U; i < rows; ++i)
     {
-        for (int j = 0; j < colCnt; ++j)
+        for (uint8_t j = 0U; j < cols; ++j)
         {
-            QLayoutItem* item = ui->plansza->itemAtPosition(i, j);
-            if (item != NULL)
+            QLayoutItem* layoutItem = m_ui->gameMap->itemAtPosition(i, j);
+            if (layoutItem != nullptr)
             {
-                QPushButton* button = dynamic_cast<QPushButton*>(item->widget());
-                button->setIconSize(QSize(60, 60));
-                QObject::connect(button, SIGNAL(clicked()), this, SLOT(tileClicked()));
+                QWidget* widget = layoutItem->widget();
+                if (widget != nullptr)
+                {
+                    QPushButton* tile = dynamic_cast<QPushButton*>(widget);
+                    tile->setIconSize(QSize(TileSizePx, TileSizePx));
+                    connect(tile, SIGNAL(clicked(bool)), this, SLOT(onTileClicked()));
+                }
             }
         }
     }
 }
 
-void MainWindow::updateScore(unsigned int score)
+void MainWindow::setTileIcon(QString imagePath, uint8_t rowIdx, uint8_t colIdx)
 {
-    ui->score->setText(QString::number(score));
+    QLayoutItem* layoutItem = m_ui->gameMap->itemAtPosition(rowIdx, colIdx);
+    if (layoutItem != nullptr)
+    {
+        QWidget* widget = layoutItem->widget();
+        if (widget != nullptr)
+        {
+            QPushButton* tile = dynamic_cast<QPushButton*>(widget);
+            tile->setIcon(QIcon{QPixmap{imagePath}});
+        }
+    }
 }
 
-void MainWindow::setIconOnTile(QString imagePath, int row, int col)
+void MainWindow::cleanTile(uint8_t rowIdx, uint8_t colIdx)
 {
-    QPixmap image(imagePath);
-    QIcon icon(image);
-
-    QLayoutItem* item = ui->plansza->itemAtPosition(row, col);
-    if (item != NULL)
+    QLayoutItem* layoutItem = m_ui->gameMap->itemAtPosition(rowIdx, colIdx);
+    if (layoutItem != nullptr)
     {
-        QPushButton* button = dynamic_cast<QPushButton*>(item->widget());
-        button->setIcon(icon);
+        QWidget* widget = layoutItem->widget();
+        if (widget != nullptr)
+        {
+            QPushButton* tile = dynamic_cast<QPushButton*>(widget);
+            tile->setIcon(QIcon());
+        }
     }
 }
 
 void MainWindow::cleanTiles()
 {
-    int rowCnt = ui->plansza->rowCount(), colCnt = ui->plansza->columnCount();
-    for (int i = 0; i < rowCnt; ++i)
+    uint8_t rows = m_ui->gameMap->rowCount();
+    uint8_t cols = m_ui->gameMap->columnCount();
+    for (uint8_t i = 0U; i < rows; ++i)
     {
-        for (int j = 0; j < colCnt; ++j)
+        for (uint8_t j = 0U; j < cols; ++j)
         {
             cleanTile(i, j);
         }
     }
 }
 
-void MainWindow::cleanTile(int x, int y)
+void MainWindow::onQoolkieGenerated(uint8_t x, uint8_t y, TileContent content)
 {
-    QLayoutItem* item = ui->plansza->itemAtPosition(x, y);
-    if (item != NULL)
+    QString iconPath;
+    iconPath.append(QString(Game::ResourcesPath));
+    iconPath.append(Game::convertContentToString(content));
+    iconPath.append(".png");
+
+    setTileIcon(iconPath, x, y);
+}
+
+void MainWindow::onFocusChanged(uint8_t x, uint8_t y, TileContent content)
+{
+    QString iconPath;
+    iconPath.append(QString(Game::ResourcesPath));
+    iconPath.append(Game::convertContentToString(content));
+    iconPath.append("_f.png");
+
+    setTileIcon(iconPath, x, y);
+}
+
+void MainWindow::onScoreChanged(uint32_t score)
+{
+    updateScore(score);
+}
+
+void MainWindow::onTileCleared(uint8_t x, uint8_t y)
+{
+    cleanTile(x, y);
+}
+
+void MainWindow::onGameFinished()
+{
+    QString name = showInputBox("Zapisz wynik", "Przegrałeś. Podaj swoje imię i zapisz wynik.");
+    m_game.saveHighscore(name);
+}
+
+void MainWindow::onTileClicked()
+{
+    QObject* object = sender();
+    if (object != nullptr)
     {
-        QPushButton* button = dynamic_cast<QPushButton*>(item->widget());
-        button->setIcon(QIcon());
+        QPushButton* tile = dynamic_cast<QPushButton*>(object);
+        if (tile != nullptr)
+        {
+            int rowIdx = -1;
+            int colIdx = -1;
+            int unused1 = -1;
+            int unused2 = -1;
+            int itemIdx = m_ui->gameMap->indexOf(tile);
+            m_ui->gameMap->getItemPosition(itemIdx, &rowIdx, &colIdx, &unused1, &unused2);
+            m_game.tileClicked(rowIdx, colIdx);
+        }
     }
 }
 
-void MainWindow::tileClicked()
+void MainWindow::startGameWith5Colors()
 {
-    QObject *button = sender();
-    QWidget *widget = dynamic_cast<QWidget*>(button);
-    if (widget == NULL)
-        return;
-
-    int row = -1, col = -1, unused_1 = 0, unused_2 = 0;
-    int idx = ui->plansza->indexOf(widget);
-    ui->plansza->getItemPosition(idx, &row, &col, &unused_1, &unused_2);
-
-    controller.tileClicked(row, col);
+    cleanTiles();
+    updateScore(0U);
+    m_game.start(ColoursUsed::Five);
 }
 
-void MainWindow::start5Clicked()
+void MainWindow::startGameWith7Colors()
 {
-    controller.setColoursNumber(5);
-    controller.start();
+    cleanTiles();
+    updateScore(0U);
+    m_game.start(ColoursUsed::Seven);
 }
 
-void MainWindow::start7Clicked()
+void MainWindow::showHighscoresFor5Colors()
 {
-    controller.setColoursNumber(7);
-    controller.start();
+    QString highscores = m_game.getHighscores(ColoursUsed::Five);
+    showMessageBox(highscores.isEmpty() ? "Brak wyników" : "Najlepsze wyniki", highscores);
 }
 
-void MainWindow::highscores5Clicked()
+void MainWindow::showHighscoresFor7Colors()
 {
-    controller.showHighscores(5);
+    QString highscores = m_game.getHighscores(ColoursUsed::Seven);
+    showMessageBox(highscores.isEmpty() ? "Brak wyników" : "Najlepsze wyniki", highscores);
 }
 
-void MainWindow::highscores7Clicked()
-{
-    controller.showHighscores(7);
-}
-
-int MainWindow::showMessageBox(QString title, QString message)
+int MainWindow::showMessageBox(const QString& title, const QString& message)
 {
     QFont font;
     font.setPixelSize(23);
-
     QMessageBox msgBox;
     msgBox.setText(title);
     msgBox.setInformativeText(message);
+    msgBox.setFont(font);
     msgBox.setStandardButtons(QMessageBox::Ok);
     msgBox.setDefaultButton(QMessageBox::Ok);
-    msgBox.setFont(font);
     return msgBox.exec();
 }
 
-QString MainWindow::showInputBox(QString title, QString textToShow)
+QString MainWindow::showInputBox(const QString& title, const QString& message)
 {
-    bool ok;
+    bool isOk = false;
     QInputDialog* dialog = new QInputDialog();
-    QString text = dialog->getText(this, title, textToShow, QLineEdit::Normal, QDir::home().dirName(), &ok);
-
-    if (ok && !text.isEmpty())
-        return text;
-    else
+    QString input = dialog->getText(this, title, message, QLineEdit::Normal, "name", &isOk);
+    if (!isOk || input.isEmpty())
+    {
         return QString("");
+    }
+    return input;
 }
 
-MainWindow::~MainWindow()
+void MainWindow::updateScore(uint32_t score)
 {
-    delete ui;
+    m_ui->score->setText(QString::number(score));
 }

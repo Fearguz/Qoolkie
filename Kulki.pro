@@ -20,7 +20,6 @@ SOURCES += main.cpp\
 HEADERS  += mainwindow.h \
     gamemap.h \
     game.h \
-    timer.h \
     highscore.h
 
 FORMS    += mainwindow.ui
